@@ -1,0 +1,25 @@
+# Maven
+target/
+*.class
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# SEC dataset
+data/sec-dataset/
+
+# Local uploads
+uploads/
+
+# Environment / secrets
+.env
+*.env

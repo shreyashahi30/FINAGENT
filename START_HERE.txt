@@ -1,0 +1,33 @@
+FINAGENT - START HERE
+
+1. Open Command Prompt in this folder.
+2. Run:
+   mvn clean test
+3. If tests pass, run:
+   mvn spring-boot:run
+4. Open:
+   http://localhost:8080
+
+What to test:
+- Unzip the SEC 2026 Q2 dataset first.
+- In the browser, select the unzipped dataset folder and click Upload & Process SEC Dataset.
+- Search for a company and select it.
+- Run Standard Analysis.
+- Run Adaptive Analysis; the system selects CREATE, MERGE, REMOVE or CONTINUE automatically based on the selected company data and runtime performance.
+- Check Performance: Before vs After Adaptation.
+- Click Run 3x4 Evaluation.
+
+Performance-aware checks included:
+- CREATE is blocked when the baseline team is too slow, overloaded, or inefficient.
+- MERGE requires high overlap and a measurable consolidation benefit based on workload/efficiency signals.
+- REMOVE requires low contribution, high redundancy and low efficiency for the candidate agent.
+- Unit tests verify that changing performance signals can change the lifecycle decision.
+
+This is a local, deterministic Demo Mode application. No API key is required.
+
+
+Academic note:
+- Read docs/THRESHOLD_SELECTION.md before the project viva. It explains why the thresholds are heuristic and how they can be calibrated experimentally.
+
+
+Dataset documentation: docs/DATASET_GUIDE.md
