@@ -10,12 +10,6 @@ import java.util.List;
 @Service
 public class PerformanceMonitor {
 
-    /**
-     * Aggregates deterministic Demo Mode proxy scores. These scores are not
-     * claimed to be direct measurements of token usage, CPU utilization or
-     * financial-analysis quality.
-     */
-
     public PerformanceSnapshot snapshot(List<AgentResult> results) {
         long time = 0;
         int workload = 0;

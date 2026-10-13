@@ -150,3 +150,7 @@ FinAgent is a **rule-based adaptive orchestration prototype in Demo Mode**. It i
 Adaptive decisions are made from both financial/external conditions and baseline runtime signals. CREATE requires a coverage trigger plus healthy success, contribution, efficiency, redundancy, workload, and execution-time conditions. MERGE requires high overlap and a measurable workload/runtime benefit. REMOVE requires low contribution, high redundancy, and low efficiency for the candidate agent. CONTINUE is used when no change is justified.
 
 Each adaptive run records performance **before adaptation** and **after adaptation**, including team size, workload, contribution, redundancy, efficiency, success, and execution time.
+
+## Additional experiments
+
+After loading the SEC dataset, use the **Threshold Sensitivity Experiments** panel to compare the lifecycle decisions under alternative redundancy, contribution, success-rate and efficiency thresholds. Use **Validation on SEC Companies** to run the Adaptive pipeline across 10, 20 or 50 company records. The equivalent endpoints are `GET /api/experiments/threshold-sensitivity` and `GET /api/experiments/sec-validation?limit=20`. Results are exploratory and should not be described as predictive-accuracy validation because the dataset does not provide labeled risk outcomes or live market/news signals.

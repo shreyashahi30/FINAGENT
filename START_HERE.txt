@@ -16,6 +16,8 @@ What to test:
 - Run Adaptive Analysis; the system selects CREATE, MERGE, REMOVE or CONTINUE automatically based on the selected company data and runtime performance.
 - Check Performance: Before vs After Adaptation.
 - Click Run 3x4 Evaluation.
+- Run Threshold Sensitivity Experiments to compare alternate threshold settings.
+- Run Validation on SEC Companies to execute Adaptive analysis on 10, 20 or 50 SEC company profiles.
 
 Performance-aware checks included:
 - CREATE is blocked when the baseline team is too slow, overloaded, or inefficient.

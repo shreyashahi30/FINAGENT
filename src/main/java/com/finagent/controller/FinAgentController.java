@@ -22,12 +22,16 @@ public class FinAgentController {
     private final AnalysisHistoryService history;
     private final EvaluationService evaluation;
     private final DatasetService dataset;
+    private final com.finagent.service.ThresholdSensitivityService thresholdSensitivity;
+    private final com.finagent.service.SecValidationService secValidation;
 
-    public FinAgentController(AnalysisService service, AnalysisHistoryService history, EvaluationService evaluation, DatasetService dataset) {
+    public FinAgentController(AnalysisService service, AnalysisHistoryService history, EvaluationService evaluation, DatasetService dataset, com.finagent.service.ThresholdSensitivityService thresholdSensitivity, com.finagent.service.SecValidationService secValidation) {
         this.service=service;
         this.history=history;
         this.evaluation=evaluation;
         this.dataset=dataset;
+        this.thresholdSensitivity=thresholdSensitivity;
+        this.secValidation=secValidation;
     }
 
     @PostMapping("/analyze")
@@ -48,6 +52,12 @@ public class FinAgentController {
 
     @GetMapping("/evaluate")
     public EvaluationResponse evaluate(@RequestParam(defaultValue="3") int repetitions) { return evaluation.run(repetitions); }
+
+    @GetMapping("/experiments/threshold-sensitivity")
+    public Map<String,Object> thresholdSensitivity() { return thresholdSensitivity.run(); }
+
+    @GetMapping("/experiments/sec-validation")
+    public Map<String,Object> secValidation(@RequestParam(defaultValue="20") int limit) { return secValidation.run(limit); }
 
     @PostMapping("/dataset/upload")
     public Map<String,Object> uploadDataset(@RequestParam("files") org.springframework.web.multipart.MultipartFile[] files) {
@@ -90,15 +100,7 @@ public class FinAgentController {
     private void validate(AnalysisRequest r) {
         if (r == null) bad("Request body is required.");
         if (r.companyName == null || r.companyName.isBlank()) bad("Company name is required.");
-        // Revenue, cash and debt are magnitudes extracted from XBRL facts and cannot legitimately
-        // be negative. Operating profit is deliberately NOT bounded here: real SEC filings
-        // routinely report an operating loss (OperatingIncomeLoss < 0), and that is exactly the
-        // kind of company this tool needs to be able to analyze rather than reject.
         if (r.revenue < 0 || r.cash < 0 || r.debt < 0) bad("Financial amounts cannot be negative.");
-        // Current ratio and debt-to-assets are non-negative by construction (see DatasetService),
-        // but no upper bound is enforced: highly leveraged real companies can and do exceed a
-        // debt-to-assets ratio of 1.0, and operating margin can be far below -100% for
-        // low-revenue, high-loss companies. Rejecting those is rejecting real data, not bad input.
         if (r.currentRatio < 0 || r.debtToAssets < 0) bad("Please enter valid financial ratios.");
         if (!Double.isFinite(r.currentRatio) || !Double.isFinite(r.debtToAssets) || !Double.isFinite(r.operatingMargin))
             bad("Please enter valid financial ratios.");

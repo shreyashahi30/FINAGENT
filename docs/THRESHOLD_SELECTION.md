@@ -56,3 +56,28 @@ The selected policy can then be based on measured trade-offs among risk-analysis
 ## Viva answer
 
 > “We did not claim that the exact thresholds came directly from a paper. The literature motivated us to monitor team-level performance and coordination, while the financial domain motivated specialist coverage rules. We converted those ideas into transparent heuristic thresholds for our prototype. The thresholds are centralized, reproducible and intended to be calibrated through future experiments.”
+
+## Implemented threshold sensitivity experiment
+
+The application exposes `GET /api/experiments/threshold-sensitivity` and a matching UI panel. It runs a one-factor-at-a-time experiment using the same four deterministic demo scenarios while varying these centralized thresholds:
+
+- Maximum average redundancy: 60, 70, 80
+- Minimum average contribution: 40, 50, 60
+- Minimum success rate: 70%, 80%, 90%
+- Minimum average efficiency: 20, 25, 30
+
+The response reports the adaptation-decision counts and average final team size/workload for each setting. The default policy is restored in a `finally` block after the experiment. Results are exploratory sensitivity measurements for this prototype, not evidence that any one threshold is universally optimal. Run experiments sequentially; threshold overrides are process-wide while an experiment is running.
+
+## Implemented multi-company SEC validation
+
+The application exposes `GET /api/experiments/sec-validation?limit=20` (supported range 1–50) and a matching UI panel. It runs Adaptive analysis on a slice of companies in the loaded SEC dataset and reports each company's CIK, filing date, decision, risk category, final team size/workload, plus aggregate decision/risk counts and availability of liquidity, debt and margin indicators. The service does not add live market or news data. This validates pipeline execution and behavior across real SEC-derived profiles; it does not claim predictive accuracy without labeled ground truth.
+
+## Sensitivity experiment interpretation (updated)
+
+The experiment uses four deterministic synthetic scenarios with liquidity, debt, and margin data-availability flags explicitly enabled. The sweep ranges are intentionally broad exploratory settings: redundancy 20/50/80, contribution 20/50/80, success rate 50/80/100 percent, and efficiency 10/30/60. Each setting changes one threshold at a time, the other thresholds are restored to their baseline values, and defaults are restored in a `finally` block. Results include observed baseline contribution, redundancy, efficiency, and success rate so that unchanged decisions can be interpreted rather than assumed to indicate sensitivity.
+
+These values are not estimated from the SEC dataset and are not industry-standard cut-offs. If observed runtime metrics do not cross a tested threshold, identical decisions are expected and should be reported as such. In particular, a success-rate sweep may not change decisions while every synthetic agent succeeds; it must not be described as evidence of a success-rate effect unless observed success rates cross the tested values.
+
+## SEC fact selection (updated)
+
+Company profiles use annual/quarterly periodic filings (10-K, 10-Q, 20-F, and 40-F), rather than selecting event filings such as 8-K as the latest financial profile. Facts are selected per accession and tag, prefer the filing's reporting period and consolidated facts, and select instant facts for balance-sheet tags. Duration facts prefer a full-year duration for annual filings and a single-quarter duration for quarterly filings, with year-to-date duration used only as a fallback. Ratios with missing/invalid denominators remain zero-valued for compatibility with the current model, but availability flags must be used to distinguish missing facts from verified zeros.

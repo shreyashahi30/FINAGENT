@@ -62,7 +62,7 @@ public class DatasetService {
 
     private void loadFromDirectory() throws IOException {
         Map<String, Filing> filings = readSub(dataDir.resolve("sub.txt"));
-        Map<String, Map<String, Double>> factsByAdsh = readNum(dataDir.resolve("num.txt"));
+        Map<String, Map<String, Double>> factsByAdsh = readNum(dataDir.resolve("num.txt"), filings);
         Map<String, CompanyFinancialProfile> result = new LinkedHashMap<>();
         for (Filing f : filings.values()) {
             Map<String, Double> facts = factsByAdsh.get(f.adsh);
@@ -92,15 +92,18 @@ public class DatasetService {
                 String[] a=split(row);
                 String adsh=get(a,idx,"adsh"), cik=get(a,idx,"cik"), name=get(a,idx,"name"), filed=get(a,idx,"filed");
                 if (adsh.isBlank() || cik.isBlank() || name.isBlank()) continue;
-                Filing f=new Filing(adsh,cik,name,get(a,idx,"form"),filed,get(a,idx,"period"));
-                // Prefer periodic filings over amendments when dates are equal.
+                String form=get(a,idx,"form").toUpperCase(Locale.ROOT);
+                // Use periodic annual/quarterly filings, not 8-K or other event filings, as the
+                // source of a comparable financial profile.
+                if (!(form.equals("10-K") || form.equals("10-Q") || form.equals("20-F") || form.equals("40-F"))) continue;
+                Filing f=new Filing(adsh,cik,name,form,filed,get(a,idx,"period"));
                 Filing old=out.get(adsh); if(old==null || safe(f.filed).compareTo(safe(old.filed))>=0) out.put(adsh,f);
             }
         }
         return out;
     }
 
-    private Map<String, Map<String, Double>> readNum(Path path) throws IOException {
+    private Map<String, Map<String, Double>> readNum(Path path, Map<String, Filing> filings) throws IOException {
         Map<String,Map<String,Double>> out=new HashMap<>();
         Map<String,Map<String,FactKey>> chosen=new HashMap<>();
         try(BufferedReader br=Files.newBufferedReader(path, StandardCharsets.UTF_8)){
@@ -110,14 +113,17 @@ public class DatasetService {
                 String[] a=split(row); String tag=get(a,idx,"tag");
                 if(!TAGS.contains(tag)) continue;
                 String adsh=get(a,idx,"adsh"), value=get(a,idx,"value"), ddate=get(a,idx,"ddate"), uom=get(a,idx,"uom"), segments=get(a,idx,"segments");
-                String qtrs=get(a,idx,"qtrs");
-                if(adsh.isBlank()||value.isBlank()||ddate.isBlank()) continue;
-                if(!("USD".equalsIgnoreCase(uom)||uom.isBlank())) continue;
+                String qtrs=get(a,idx,"qtrs"); Filing filing=filings.get(adsh);
+                if(filing==null || value.isBlank() || ddate.isBlank()) continue;
+                // The SEC Financial Statement Data Set reports USD and USD-per-share values;
+                // this project uses monetary values, so accept only USD facts.
+                if(!"USD".equalsIgnoreCase(uom)) continue;
                 try{
-                    double v=Double.parseDouble(value); int d=Integer.parseInt(ddate); int q=parseInt(qtrs);
+                    double v=Double.parseDouble(value); if(!Double.isFinite(v)) continue;
+                    int d=Integer.parseInt(ddate); int q=parseInt(qtrs);
+                    FactKey now=new FactKey(d,q,segments.isBlank(),v);
                     Map<String,FactKey> m=chosen.computeIfAbsent(adsh,k->new HashMap<>());
-                    FactKey old=m.get(tag); FactKey now=new FactKey(d,q,segments.isBlank(),v);
-                    if(old==null || better(now,old)) m.put(tag,now);
+                    FactKey old=m.get(tag); if(old==null || better(now,old,tag,filing)) m.put(tag,now);
                 }catch(NumberFormatException ignored){}
             }
         }
@@ -129,19 +135,39 @@ public class DatasetService {
         return out;
     }
 
-    private boolean better(FactKey now, FactKey old){
-        if(now.date!=old.date) return now.date>old.date;
+    private static final Set<String> INSTANT_TAGS = Set.of("CashAndCashEquivalentsAtCarryingValue",
+            "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents", "Assets", "AssetsCurrent",
+            "Liabilities", "LiabilitiesCurrent", "StockholdersEquity",
+            "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+            "AccountsReceivableNetCurrent", "InventoryNet", "LongTermDebtCurrent",
+            "LongTermDebtNoncurrent", "LongTermDebt", "LongTermDebtAndFinanceLeaseObligationsCurrent",
+            "LongTermDebtAndFinanceLeaseObligationsNoncurrent", "ShortTermBorrowings", "ShortTermDebt");
+
+    private boolean better(FactKey now, FactKey old, String tag, Filing filing){
+        int targetDate=parseInt(filing.period);
+        boolean nowExact=targetDate>0 && now.date==targetDate, oldExact=targetDate>0 && old.date==targetDate;
+        if(nowExact!=oldExact) return nowExact;
+        // Never take a fact dated after the filing's reporting period when a period-matched fact exists.
+        boolean nowNotFuture=targetDate<=0 || now.date<=targetDate, oldNotFuture=targetDate<=0 || old.date<=targetDate;
+        if(nowNotFuture!=oldNotFuture) return nowNotFuture;
         if(now.consolidated!=old.consolidated) return now.consolidated;
-        // A single ddate can carry more than one duration for the same tag (e.g. a 10-Q filer
-        // tags revenue with qtrs=1 for the quarter AND qtrs=2/3 for the year-to-date total, both
-        // stamped with the same period-end date). Prefer the shortest reported duration so the
-        // extracted figure represents that period's activity rather than a cumulative total;
-        // qtrs<0 marks an unparsed/missing value and is always the worst choice.
-        if(now.qtrs>=0 && old.qtrs>=0 && now.qtrs!=old.qtrs) return now.qtrs<old.qtrs;
-        if((now.qtrs>=0) != (old.qtrs>=0)) return now.qtrs>=0;
+        boolean instant=INSTANT_TAGS.contains(tag);
+        int wanted=instant?0:(filing.form.equals("10-K")||filing.form.equals("20-F")||filing.form.equals("40-F")?4:1);
+        int nowDuration=durationRank(now.qtrs,wanted,instant), oldDuration=durationRank(old.qtrs,wanted,instant);
+        if(nowDuration!=oldDuration) return nowDuration<oldDuration;
+        if(now.date!=old.date) return now.date>old.date;
         return false;
     }
-    private int parseInt(String s){try{return Integer.parseInt(s);}catch(Exception e){return -1;}}
+
+    private int durationRank(int qtrs,int wanted,boolean instant){
+        if(qtrs<0) return 1000;
+        if(instant) return qtrs==0?0:100+qtrs;
+        if(qtrs==wanted) return 0;
+        // For quarterly reports, a year-to-date duration is a fallback only when a quarter fact
+        // is absent; for annual reports, shorter durations are not substituted for annual totals.
+        if(wanted==1 && qtrs==3) return 10;
+        return 100+Math.abs(qtrs-wanted);
+    }
 
     private CompanyFinancialProfile profile(Filing f, Map<String,Double> x){
         CompanyFinancialProfile p=new CompanyFinancialProfile();
@@ -162,9 +188,9 @@ public class DatasetService {
         p.debt=first(x,"LongTermDebtCurrent","LongTermDebtAndFinanceLeaseObligationsCurrent")
                 +first(x,"LongTermDebtNoncurrent","LongTermDebtAndFinanceLeaseObligationsNoncurrent","LongTermDebt")
                 +first(x,"ShortTermBorrowings","ShortTermDebt");
-        p.currentRatio=p.currentLiabilities>0?p.currentAssets/p.currentLiabilities:0;
-        p.debtToAssets=p.totalAssets>0?p.debt/p.totalAssets:0;
-        p.operatingMargin=p.revenue!=0?p.operatingProfit/p.revenue*100:0;
+        p.currentRatio=p.currentLiabilities>0 && p.currentAssets>=0?p.currentAssets/p.currentLiabilities:0;
+        p.debtToAssets=p.totalAssets>0 && p.debt>=0?p.debt/p.totalAssets:0;
+        p.operatingMargin=p.revenue>0?p.operatingProfit/p.revenue*100:0;
         // A tag being absent from the filing is different from the company reporting zero for
         // it, and the two must not be conflated: "no debt tag filed" is not the same claim as
         // "this company carries zero debt". These flags record which case actually happened so
@@ -181,6 +207,10 @@ public class DatasetService {
 
     private double first(Map<String,Double> x,String... tags){for(String t:tags){Double v=x.get(t);if(v!=null)return v;}return 0;}
     private boolean anyPresent(Map<String,Double> x,String... tags){for(String t:tags) if(x.containsKey(t)) return true; return false;}
+    private static int parseInt(String value){
+        try { return Integer.parseInt(value == null ? "" : value.trim()); }
+        catch (NumberFormatException ex) { return -1; }
+    }
     private String[] split(String s){return s.split("\\t",-1);}
     private Map<String,Integer> indexes(String[] h){Map<String,Integer> m=new HashMap<>();for(int i=0;i<h.length;i++)m.put(h[i].trim().toLowerCase(),i);return m;}
     private String get(String[] a,Map<String,Integer> idx,String key){Integer i=idx.get(key);return i==null||i>=a.length?"":a[i].trim();}

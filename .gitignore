@@ -1,25 +1,26 @@
-# Maven
+# Maven build output
 target/
-*.class
 
-# IDE
+# IDE files
 .idea/
 .vscode/
 *.iml
 
-# OS
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Log files
+*.log
+
+# Operating system files
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
+# Python cache, if applicable
+__pycache__/
+*.pyc
 
-# SEC dataset
+# Local SEC dataset
 data/sec-dataset/
-
-# Local uploads
-uploads/
-
-# Environment / secrets
-.env
-*.env

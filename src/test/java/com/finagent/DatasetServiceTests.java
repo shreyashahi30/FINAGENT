@@ -67,6 +67,28 @@ class DatasetServiceTests {
     }
 
     @Test
+    void prefersAnnualDurationForAnnualFilingAndQuarterDurationForQuarterlyFiling() throws Exception {
+        Path dir = tempDir.resolve("duration-selection");
+        java.nio.file.Files.createDirectories(dir);
+        DatasetService dataset = new DatasetService(dir);
+        String sub = String.join("\n", SUB_HEADER,
+                "0010-01\t0000333333\tAnnual Corp\t10-K\t20251231\t20260201",
+                "0011-01\t0000444444\tQuarter Corp\t10-Q\t20260331\t20260501") + "\n";
+        String num = String.join("\n", NUM_HEADER,
+                "0010-01\tRevenues\t20251231\t1\tUSD\t\t100",
+                "0010-01\tRevenues\t20251231\t4\tUSD\t\t400",
+                "0010-01\tOperatingIncomeLoss\t20251231\t4\tUSD\t\t40",
+                "0010-01\tAssets\t20251231\t0\tUSD\t\t1000",
+                "0011-01\tRevenues\t20260331\t3\tUSD\t\t300",
+                "0011-01\tRevenues\t20260331\t1\tUSD\t\t120",
+                "0011-01\tOperatingIncomeLoss\t20260331\t1\tUSD\t\t12",
+                "0011-01\tAssets\t20260331\t0\tUSD\t\t500") + "\n";
+        dataset.upload(new org.springframework.web.multipart.MultipartFile[]{multipart("sub.txt", sub), multipart("num.txt", num)});
+        assertEquals(400.0, dataset.get("0000333333").revenue, 0.0001);
+        assertEquals(120.0, dataset.get("0000444444").revenue, 0.0001);
+    }
+
+    @Test
     void aCompanyWithNoDebtTagsIsFlaggedAsMissingNotAsZeroDebt() throws Exception {
         DatasetService dataset = new DatasetService(tempDir);
 
